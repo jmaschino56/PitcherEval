@@ -3,6 +3,7 @@ from pybaseball import playerid_lookup
 import pandas as pd
 import math as m
 import matplotlib.pylab as plt
+plt.style.use('seaborn-darkgrid')
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.expand_frame_repr', False)
@@ -21,14 +22,10 @@ def getNumber(last, first):
 def dataGrab(number, start, end):
     data = statcast_pitcher(start_dt=start, end_dt=end,
                             player_id=number)
-    data = data[['pitch_type', 'effective_speed', 'release_pos_x', 'plate_x',
-                 'release_pos_z', 'plate_z', 'release_extension', 'zone',
-                 'launch_speed', 'launch_angle']]
-    data = pd.DataFrame(data, columns=['pitch_type', 'effective_speed',
-                                       'release_pos_x', 'plate_x',
-                                       'release_pos_z', 'plate_z',
-                                       'release_extension', 'zone',
-                                       'launch_speed', 'launch_angle'])
+    data = data[['pitch_type', 'release_speed', 'effective_speed',
+                 'release_pos_x', 'plate_x', 'release_pos_z', 'plate_z',
+                 'release_extension', 'zone', 'launch_speed', 'launch_angle',
+                 'estimated_woba_using_speedangle']]
     data.index = range(len(data['pitch_type']))
     return data
 
@@ -46,11 +43,12 @@ def release_data_per(before, after, end, begin):
         pitchData = before[is_pitch]
         date = 'Before ' + end
         name = countsB.index[i]
-        avgEffSpeed = round(pitchData['effective_speed'].mean(), 2)
+        avgVelo = round(pitchData['release_speed'].dropna().mean(), 1)
+        avgEffSpeed = round(pitchData['effective_speed'].mean(), 1)
         averageRelExt = round(pitchData['release_extension'].mean(), 2)
         averageRelX = round(pitchData['plate_x'].mean(), 2)
         averageRelZ = round(pitchData['plate_z'].mean(), 2)
-        pitch = [date, name, avgEffSpeed, averageRelExt,
+        pitch = [date, name, avgVelo, avgEffSpeed, averageRelExt,
                  averageRelX, averageRelZ]
         pitches.append(pitch)
     for i in range(len(countsA)):
@@ -58,14 +56,16 @@ def release_data_per(before, after, end, begin):
         pitchData = after[is_pitch]
         date = 'After ' + begin
         name = countsA.index[i]
-        avgEffSpeed = round(pitchData['effective_speed'].mean(), 2)
+        avgVelo = round(pitchData['release_speed'].dropna().mean(), 1)
+        avgEffSpeed = round(pitchData['effective_speed'].mean(), 1)
         averageRelExt = round(pitchData['release_extension'].mean(), 2)
         averageRelX = round(pitchData['plate_x'].mean(), 2)
         averageRelZ = round(pitchData['plate_z'].mean(), 2)
-        pitch = [date, name, avgEffSpeed, averageRelExt,
+        pitch = [date, name, avgVelo, avgEffSpeed, averageRelExt,
                  averageRelX, averageRelZ]
         pitches.append(pitch)
     pitches = pd.DataFrame(pitches, columns=['Before/After', 'Name',
+                                             'Average_Velocity',
                                              'Effective_Speed',
                                              'Release_Extension',
                                              'Horizontal_Break',
@@ -81,53 +81,67 @@ def plot_release_data_per(before, after, end, begin):
     after = after.loc[after['pitch_type'].isin(pitch_types)]
     countsB = before['pitch_type'].value_counts(dropna=True)
     countsA = after['pitch_type'].value_counts(dropna=True)
-    fig, axes = plt.subplots(nrows=2, ncols=1)
-    fig.set_size_inches(8, 6, forward=True)
-    fig.subplots_adjust(hspace=0.4)
-    ax0, ax1 = axes.flatten()
+    fig, axes = plt.subplots(nrows=3, ncols=1)
+    fig.set_size_inches(8, 8, forward=True)
+    fig.subplots_adjust(hspace=0.25, top=.95, bottom=.05, right=.95, left=.1)
+    ax0, ax1, ax2 = axes.flatten()
+    ax0.plot([.79, .79, -.79, -.79, .79], [3.5, 1.5, 1.5, 3.5, 3.5],
+             color='red', label='K Zone')
+    ax0.plot([.94, .94, -.94, -.94, .94], [3.73, 1.27, 1.27, 3.73, 3.73],
+             color='red', label='Outer Limits of K Zone', ls=':', alpha=0.5)
     for i in range(len(countsB)):
         is_pitch = before['pitch_type'] == countsB.index[i]
         pitchData = before[is_pitch]
         name = countsB.index[i]
-        avgEffSpeed = round(pitchData['effective_speed'].mean(), 2)
-        averageRelX = round(pitchData['plate_x'].mean(), 2)
-        averageRelZ = round(pitchData['plate_z'].mean(), 2)
+        avgVelo = round(pitchData['release_speed'].dropna().mean(), 1)
+        avgEffSpeed = round(pitchData['effective_speed'].dropna().mean(), 1)
+        averageRelX = round(pitchData['plate_x'].dropna().mean(), 2)
+        averageRelZ = round(pitchData['plate_z'].dropna().mean(), 2)
         label = name + ' Before'
         ax0.scatter(averageRelX, averageRelZ, label=label, s=100)
-        ax1.bar(label, avgEffSpeed)
-        ax1.text(label, 70, s=round(avgEffSpeed, 1),
+        ax1.bar(label, avgVelo)
+        ax1.text(label, 70, s=round(avgVelo, 1), color='white',
+                 horizontalalignment='center', verticalalignment='center')
+        ax2.bar(label, avgEffSpeed)
+        ax2.text(label, 70, s=round(avgEffSpeed, 1), color='white',
                  horizontalalignment='center', verticalalignment='center')
     for i in range(len(countsA)):
         is_pitch = after['pitch_type'] == countsA.index[i]
         pitchData = after[is_pitch]
         name = countsA.index[i]
-        avgEffSpeed = round(pitchData['effective_speed'].mean(), 2)
-        averageRelX = round(pitchData['plate_x'].mean(), 2)
-        averageRelZ = round(pitchData['plate_z'].mean(), 2)
+        avgVelo = round(pitchData['release_speed'].dropna().mean(), 1)
+        avgEffSpeed = round(pitchData['effective_speed'].dropna().mean(), 2)
+        averageRelX = round(pitchData['plate_x'].dropna().mean(), 2)
+        averageRelZ = round(pitchData['plate_z'].dropna().mean(), 2)
         label = name + ' After'
         ax0.scatter(averageRelX, averageRelZ, label=label, s=100)
-        ax1.bar(label, avgEffSpeed)
-        ax1.text(label, 70, s=round(avgEffSpeed, 1),
+        ax1.bar(label, avgVelo)
+        ax1.text(label, 70, s=round(avgVelo, 1), color='white',
                  horizontalalignment='center', verticalalignment='center')
-    ax0.plot([.79, .79, -.79, -.79, .79], [3.5, 1.5, 1.5, 3.5, 3.5],
-             color='red', label='K Zone')
-    ax0.plot([.94, .94, -.94, -.94, .94], [3.73, 1.27, 1.27, 3.73, 3.73],
-             color='red', label='Outer Limits of K Zone', ls=':', alpha=0.5)
+        ax2.bar(label, avgEffSpeed)
+        ax2.text(label, 70, s=round(avgEffSpeed, 1), color='white',
+                 horizontalalignment='center', verticalalignment='center')
+
     ax0.legend(prop={'size': 7})
     ax0.set_title('Average Location at the Plate (Catcher\'s View)')
     ax0.set_xlim(-3, 3)
     ax0.set_ylim(1, 4)
     ax0.get_xaxis().set_visible(False)
     ax0.get_yaxis().set_visible(False)
-    ax1.set_title('Average Effective Velocity per Pitch')
+    ax1.set_title('Average Velocity per Pitch')
     ax1.set_ylim(67, 102)
-    ax1.set_ylabel('Effective Velocity (mph)')
+    ax1.set_ylabel('Velocity (mph)')
+    ax2.set_title('Average Effective Velocity per Pitch')
+    ax2.set_ylim(67, 102)
+    ax2.set_ylabel('Effective Velocity (mph)')
 
 
 # have to have this as most data points are null for launch speed/angle
 def bat_exit_per(before, after, end, begin):
-    before = before[['pitch_type', 'launch_speed', 'launch_angle']].dropna()
-    after = after[['pitch_type', 'launch_speed', 'launch_angle']].dropna()
+    before = before[['pitch_type', 'launch_speed', 'launch_angle',
+                     'estimated_woba_using_speedangle']].dropna()
+    after = after[['pitch_type', 'launch_speed', 'launch_angle',
+                   'estimated_woba_using_speedangle']].dropna()
     countsB = before['pitch_type'].value_counts(dropna=True)
     countsA = after['pitch_type'].value_counts(dropna=True)
     pitches = []
@@ -139,7 +153,8 @@ def bat_exit_per(before, after, end, begin):
         name = countsB.index[i]
         lauchSpeedB = round(pitchData['launch_speed'].mean(), 2)
         launchAngleB = round(pitchData['launch_angle'].mean(), 2)
-        pitch = [dateB, name, lauchSpeedB, launchAngleB]
+        avgwOBA = round(pitchData['estimated_woba_using_speedangle'].mean(), 3)
+        pitch = [dateB, name, lauchSpeedB, launchAngleB, avgwOBA]
         pitches.append(pitch)
 
     for i in range(len(countsA)):
@@ -149,20 +164,25 @@ def bat_exit_per(before, after, end, begin):
         name = countsA.index[i]
         launchSpeedA = round(pitchData['launch_speed'].mean(), 2)
         launchAngleA = round(pitchData['launch_angle'].mean(), 2)
-        pitch = [dateB, name, launchSpeedA, launchAngleA]
+        avgwOBA = round(pitchData['estimated_woba_using_speedangle'].mean(), 2)
+        pitch = [dateB, name, launchSpeedA, launchAngleA, avgwOBA]
         pitches.append(pitch)
     pitches = pd.DataFrame(pitches, columns=['Before/After', 'Name',
-                                             'Launch_Speed', 'Launch_Angle'])
+                                             'Launch_Speed', 'Launch_Angle',
+                                             'Average_wOBA'])
     return pitches
 
 
 def plot_bat_exit_per(before, after, end, begin):
-    before = before[['pitch_type', 'launch_speed', 'launch_angle']].dropna()
-    after = after[['pitch_type', 'launch_speed', 'launch_angle']].dropna()
+    before = before[['pitch_type', 'launch_speed', 'launch_angle',
+                     'estimated_woba_using_speedangle']].dropna()
+    after = after[['pitch_type', 'launch_speed', 'launch_angle',
+                   'estimated_woba_using_speedangle']].dropna()
     countsB = before['pitch_type'].value_counts(dropna=True)
     countsA = after['pitch_type'].value_counts(dropna=True)
     fig, axes = plt.subplots(nrows=1, ncols=1)
     fig.set_size_inches(6, 6)
+    fig.subplots_adjust(top=.9, bottom=.05, right=.95, left=.05)
     ax = plt.subplot(111, projection='polar')
     for i in range(len(countsB)):
         is_pitch = before['pitch_type'] == countsB.index[i]
@@ -171,16 +191,20 @@ def plot_bat_exit_per(before, after, end, begin):
         name = countsB.index[i]
         launchSpeed = round(pitchData['launch_speed'].mean(), 2)
         launchAngle = round(pitchData['launch_angle'].mean(), 2)
+        avgwOBA = round(pitchData['estimated_woba_using_speedangle'].mean(), 2)
         label = name + ' Before'
-        ax.scatter(m.radians(launchAngle), launchSpeed, label=label)
+        ax.scatter(m.radians(launchAngle), launchSpeed, s=avgwOBA*200,
+                   label=label)
     for i in range(len(countsA)):
         is_pitch = after['pitch_type'] == countsA.index[i]
         pitchData = after[is_pitch]
         name = countsA.index[i]
         launchSpeed = round(pitchData['launch_speed'].mean(), 2)
         launchAngle = round(pitchData['launch_angle'].mean(), 2)
+        avgwOBA = round(pitchData['estimated_woba_using_speedangle'].mean(), 2)
         label = name + ' After'
-        ax.scatter(m.radians(launchAngle), launchSpeed, label=label)
+        ax.scatter(m.radians(launchAngle), launchSpeed, s=avgwOBA*200,
+                   label=label)
     ax.legend(prop={'size': 7})
     ax.set_ylim(0, 120)
     ax.set_xlim(m.pi/2, 0)
@@ -205,7 +229,6 @@ def plot_pitch_location(before, after, first, last, end, begin):
     pitchesAfter = []
     fig, axes = plt.subplots(nrows=2, ncols=1)
     fig.set_size_inches(8, 6, forward=True)
-    fig.subplots_adjust(hspace=0.34, left=0.09, bottom=0.08)
     ax0, ax1 = axes.flatten()
     for i in range(len(countsB)):
         is_pitch = before['pitch_type'] == countsB.index[i]
@@ -246,6 +269,7 @@ def plot_pitch_location(before, after, first, last, end, begin):
     ax1.set_ylim(0, 0.25)
     ax1.set_xlabel('Zone')
     ax1.set_ylabel('Density')
+    fig.subplots_adjust(hspace=0.35, left=0.1, bottom=0.07, right=0.95, top=0.95)
 
 
 def main():
@@ -274,6 +298,9 @@ def main():
 
     data = pd.merge(release_data, bat_data)
     print(data)
+    fileName = pFirst + pLast + '.csv'
+    data.to_csv(fileName,
+                header=True, index=None)
     plt.show()
     input('Enter to Quit.')
 
